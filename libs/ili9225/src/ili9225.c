@@ -19,6 +19,7 @@
 #include <hardware/spi.h>
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
+#include "hardware/dma.h"
 #include "pico/time.h"
 
 #include "ili9225.h"
@@ -269,6 +270,48 @@ static uint16_t read_data(void);
 static uint16_t get_register(uint16_t reg);
 #endif
 
+static int dma_irq;
+static uint dma_tx;
+static dma_channel_config c;
+
+static ili9225_dma_finish_callback_t f_dma_finish_callback;
+
+static void _ili9225_dma_finish_callback(void)
+{
+	ili9225_write_pixels_end();
+
+    if (dma_irq == DMA_IRQ_0) {
+        dma_channel_set_irq0_enabled(dma_tx, true);
+        dma_hw->ints0 = 1u << dma_tx;
+    } else if (dma_irq == DMA_IRQ_1) {
+        dma_channel_set_irq0_enabled(dma_tx, true);
+        dma_hw->ints1 = 1u << dma_tx;
+    } else {
+        return;
+    }
+    
+
+    f_dma_finish_callback();
+}
+
+void ili9225_set_dma_irq_handler(uint num, ili9225_dma_finish_callback_t cb)
+{
+    if (num == DMA_IRQ_0) {
+        dma_channel_set_irq0_enabled(dma_tx, true);
+    } else if (num == DMA_IRQ_1) {
+        dma_channel_set_irq1_enabled(dma_tx, true);
+    } else {
+        return;
+    }
+    
+    dma_irq = num;
+
+    f_dma_finish_callback = cb;
+
+    irq_set_exclusive_handler(num, _ili9225_dma_finish_callback);
+    irq_set_enabled(num, true);
+}
+
 static void write_register(uint16_t cmd)
 {
 	ili9225_set_rs(0);
@@ -506,6 +549,14 @@ unsigned ili9225_init(const struct ili9225_config *config)
 	ret = 0;
 #endif
 
+	// DMA Configuration
+	{
+		// Setup the data channel
+		c = dma_channel_get_default_config(dma_tx);  // Default configs
+		channel_config_set_transfer_data_size(&c, DMA_SIZE_16);          // 16-bit txfers
+		channel_config_set_dreq(&c, spi_get_dreq(ili9225_cfg.spi, true));
+	}
+
 	return ret;
 }
 
@@ -522,9 +573,24 @@ void ili9225_delay_ms(unsigned ms)
 	sleep_ms(ms);
 }
 
+
+void ili9225_dma_write(const uint16_t *data, size_t len)
+{
+	ili9225_write_pixels_start();
+
+    dma_channel_configure(dma_tx, &c,
+                          &spi_get_hw(ili9225_cfg.spi)->dr, // write address
+                          data, // read address
+                          len, // element count (each element is of size transfer_data_size)
+                          false); // don't start yet
+
+    dma_start_channel_mask((1u << dma_tx));
+}
+
+
 void ili9225_spi_write16(const uint16_t *halfwords, size_t len)
 {
-	spi_write16_blocking(spi0, halfwords, len);
+	spi_write16_blocking(ili9225_cfg.spi, halfwords, len);
 }
 
 void ili9225_set_led(bool state)

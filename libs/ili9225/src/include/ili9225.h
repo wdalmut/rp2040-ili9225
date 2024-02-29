@@ -47,6 +47,8 @@ typedef enum {
 	ILI9225_COLOR_MODE_8COLOR = 1
 } ili9225_color_mode_e;
 
+typedef void (*ili9225_dma_finish_callback_t)(void);
+
 /**
  * Controls the reset pin of the ILI9225.
  * \param state	Set to 0 on low output, else high.
@@ -187,5 +189,8 @@ void ili9225_get_letter(uint16_t *fbuf,char letter,uint16_t color,uint16_t bgcol
  * All characters have dimensions of 8x8 pixels.
  */
 void ili9225_text(char *s,uint8_t x,uint8_t y,uint16_t color,uint16_t bgcolor);
+
+void ili9225_dma_write(const uint16_t *data, size_t len);
+void ili9225_set_dma_irq_handler(uint num, ili9225_dma_finish_callback_t);
 
 #endif
