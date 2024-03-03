@@ -391,7 +391,7 @@ unsigned ili9225_init(const struct ili9225_config *config)
 		clock_configure(clk_peri, 0,
 			CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
 			125 * 1000 * 1000, 125 * 1000 * 1000);
-		spi_init(spi0, 30*1000*1000);
+		spi_init(ili9225_cfg.spi, 30*1000*1000);
 		spi_set_format(ili9225_cfg.spi, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 	}
 
